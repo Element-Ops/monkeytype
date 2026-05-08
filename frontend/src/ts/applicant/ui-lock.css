@@ -1,5 +1,6 @@
 body.applicant-mode mount[data-component="header"],
 body.applicant-mode mount[data-component="footer"],
+body.applicant-mode mount[data-component="overlays"],
 body.applicant-mode mount[data-component="devtools"],
 body.applicant-mode #solidmodals,
 body.applicant-mode #solidpopups,
