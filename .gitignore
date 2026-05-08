@@ -133,3 +133,9 @@ frontend/static/webfonts-preview
 frontend/.env.sentry-build-plugin
 .claude/worktrees
 1024MiB
+
+# MCP config (contains API keys — keep local only)
+.mcp.json
+
+# Local-only recruitment process snapshot (source of truth lives in Google Sheets)
+docs/applicant-integration/recruitment-process.md
