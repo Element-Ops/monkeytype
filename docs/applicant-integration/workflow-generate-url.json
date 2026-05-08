@@ -1,0 +1,127 @@
+{
+  "name": "Applicant Typing - Generate URL",
+  "nodes": [
+    {
+      "id": "webhook-trigger",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [240, 300],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "applicant-typing-generate-url",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "build-token",
+      "name": "Build Token",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 300],
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// HARDCODED SECRET — replace placeholder before activating, never commit to git\nconst SECRET = 'REPLACE_WITH_32_PLUS_CHAR_HMAC_SECRET';\nconst BASE_URL = 'https://typing.elementops.com';\nconst TTL_DAYS = 30;\n\nconst crypto = require('crypto');\nconst body = $input.first().json.body || $input.first().json;\nconst recordId = body.recordId || body.record_id;\n\nif (!recordId || typeof recordId !== 'string' || !recordId.startsWith('rec')) {\n  throw new Error('missing or invalid recordId in webhook body');\n}\n\nconst nowSec = Math.floor(Date.now() / 1000);\nconst expiresAtSec = nowSec + TTL_DAYS * 86400;\nconst nonce = crypto.randomBytes(8).toString('hex');\n\nconst payload = { r: recordId, e: expiresAtSec, n: nonce };\nconst tokenB64 = Buffer.from(JSON.stringify(payload)).toString('base64url');\nconst sig = crypto.createHmac('sha256', SECRET).update(tokenB64).digest('hex');\nconst token = tokenB64 + '.' + sig;\nconst url = BASE_URL + '/?t=' + token;\n\nreturn [{\n  json: {\n    recordId: recordId,\n    token: token,\n    url: url,\n    expiresAt: new Date(expiresAtSec * 1000).toISOString(),\n    generatedAt: new Date(nowSec * 1000).toISOString()\n  }\n}];"
+      }
+    },
+    {
+      "id": "datatable-insert",
+      "name": "Insert Token Row",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [720, 300],
+      "parameters": {
+        "resource": "row",
+        "operation": "insert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "Yb9NT9DUmiMhXhks",
+          "mode": "id"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "record_id": "={{ $json.recordId }}",
+            "token": "={{ $json.token }}",
+            "expires_at": "={{ $json.expiresAt }}",
+            "generated_at": "={{ $json.generatedAt }}"
+          }
+        }
+      }
+    },
+    {
+      "id": "airtable-update",
+      "name": "Update Airtable Record",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [960, 300],
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "appa28zyvdbF534Xl",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblsDdMFkapAv604l",
+          "mode": "id"
+        },
+        "id": {
+          "__rl": true,
+          "value": "={{ $('Build Token').item.json.recordId }}",
+          "mode": "expression"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Typing Speed URL - Monkeytype": "={{ $('Build Token').item.json.url }}"
+          }
+        },
+        "options": {}
+      },
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "mih6ygbgIAbAPOgn",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "respond",
+      "name": "Respond OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [1200, 300],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { status: 'ok', recordId: $('Build Token').item.json.recordId, url: $('Build Token').item.json.url } }}",
+        "options": {
+          "responseCode": 200
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Build Token", "type": "main", "index": 0 }]]
+    },
+    "Build Token": {
+      "main": [[{ "node": "Insert Token Row", "type": "main", "index": 0 }]]
+    },
+    "Insert Token Row": {
+      "main": [
+        [{ "node": "Update Airtable Record", "type": "main", "index": 0 }]
+      ]
+    },
+    "Update Airtable Record": {
+      "main": [[{ "node": "Respond OK", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

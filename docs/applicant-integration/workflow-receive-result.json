@@ -1,0 +1,242 @@
+{
+  "name": "Applicant Typing - Receive Result",
+  "nodes": [
+    {
+      "id": "webhook-trigger",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [200, 300],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "applicant-typing-result",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "verify",
+      "name": "Verify Token & Plausibility",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [420, 300],
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// HARDCODED SECRET — must match generate-url; replace placeholder before activating\nconst SECRET = 'REPLACE_WITH_32_PLUS_CHAR_HMAC_SECRET';\n\nconst crypto = require('crypto');\n\nfunction out(obj) { return [{ json: obj }]; }\nfunction fail(code, message, extra) { return out(Object.assign({ _statusCode: code, error: message }, extra || {})); }\n\nconst inputJson = $input.first().json;\nconst body = inputJson.body || inputJson;\nconst token = body.token;\nconst result = body.result;\n\nif (!token || typeof token !== 'string') return fail(400, 'missing token');\nif (!result || typeof result !== 'object') return fail(400, 'missing result');\n\nconst dotIdx = token.lastIndexOf('.');\nif (dotIdx < 1) return fail(401, 'malformed token');\nconst tokenB64 = token.slice(0, dotIdx);\nconst sig = token.slice(dotIdx + 1);\n\nconst expected = crypto.createHmac('sha256', SECRET).update(tokenB64).digest('hex');\nlet sigOk = false;\ntry {\n  if (sig.length === expected.length) {\n    sigOk = crypto.timingSafeEqual(Buffer.from(sig, 'hex'), Buffer.from(expected, 'hex'));\n  }\n} catch (e) { sigOk = false; }\nif (!sigOk) return fail(401, 'invalid signature');\n\nlet payload;\ntry {\n  payload = JSON.parse(Buffer.from(tokenB64, 'base64url').toString('utf8'));\n} catch (e) {\n  return fail(401, 'invalid payload');\n}\n\nconst recordId = payload.r;\nconst expiresAt = payload.e;\nconst now = Math.floor(Date.now() / 1000);\n\nif (!recordId || typeof recordId !== 'string' || !recordId.startsWith('rec')) {\n  return fail(401, 'invalid recordId in token');\n}\nif (typeof expiresAt !== 'number' || now > expiresAt) {\n  return fail(410, 'token expired', { recordId: recordId });\n}\n\n// Plausibility checks — reject any obviously cheated/scripted result\nconst issues = [];\nconst td = result.testDuration;\nif (typeof td !== 'number' || td < 55) issues.push('testDuration ' + td);\n\nlet charTotal = 0;\nif (Array.isArray(result.charStats)) {\n  charTotal = result.charStats.reduce(function(a, b) { return a + (typeof b === 'number' ? b : 0); }, 0);\n}\nif (charTotal < 150) issues.push('charTotal ' + charTotal);\n\nif (typeof result.wpm !== 'number' || result.wpm > 200) issues.push('wpm ' + result.wpm);\nif (typeof result.afkDuration !== 'number' || result.afkDuration >= 10) issues.push('afkDuration ' + result.afkDuration);\nif (typeof result.restartCount !== 'number' || result.restartCount > 3) issues.push('restartCount ' + result.restartCount);\n\nif (Array.isArray(result.keySpacing) && result.keySpacing.length > 5) {\n  const ks = result.keySpacing;\n  const mean = ks.reduce(function(a, b) { return a + b; }, 0) / ks.length;\n  const variance = ks.reduce(function(a, b) { return a + (b - mean) * (b - mean); }, 0) / ks.length;\n  if (variance < 1) issues.push('keySpacing variance ' + variance.toFixed(2));\n}\n\nif (issues.length > 0) {\n  return fail(422, 'plausibility: ' + issues.join('; '), { recordId: recordId });\n}\n\nconst wpm = Math.round(result.wpm * 10) / 10;\nconst acc = typeof result.acc === 'number' ? result.acc : 0;\n// Airtable percent field stores 0-1 (0.95 = 95%)\nconst accuracy = Math.round((acc / 100) * 1000) / 1000;\n\nreturn out({\n  _statusCode: 200,\n  recordId: recordId,\n  wpm: wpm,\n  accuracy: accuracy,\n  submittedAt: new Date().toISOString()\n});"
+      }
+    },
+    {
+      "id": "if-status-ok",
+      "name": "If Verified",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [640, 300],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "check-200",
+              "leftValue": "={{ $json._statusCode }}",
+              "rightValue": 200,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "airtable-get",
+      "name": "Get Airtable Record",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [860, 200],
+      "parameters": {
+        "resource": "record",
+        "operation": "get",
+        "base": {
+          "__rl": true,
+          "value": "appa28zyvdbF534Xl",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblsDdMFkapAv604l",
+          "mode": "id"
+        },
+        "id": "={{ $json.recordId }}",
+        "options": {}
+      },
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "mih6ygbgIAbAPOgn",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "if-already-submitted",
+      "name": "If Already Submitted",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [1080, 200],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "check-submitted",
+              "leftValue": "={{ $json.fields[\"Typing Speed Submitted - Monkeytype\"] }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "respond-409",
+      "name": "Respond 409 Already Submitted",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [1300, 80],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { error: 'already submitted', recordId: $('Verify Token & Plausibility').item.json.recordId } }}",
+        "options": {
+          "responseCode": 409
+        }
+      }
+    },
+    {
+      "id": "airtable-update",
+      "name": "Update Airtable Record",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [1300, 320],
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "appa28zyvdbF534Xl",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblsDdMFkapAv604l",
+          "mode": "id"
+        },
+        "id": {
+          "__rl": true,
+          "value": "={{ $('Verify Token & Plausibility').item.json.recordId }}",
+          "mode": "expression"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Typing Speed WPM - Monkeytype": "={{ $('Verify Token & Plausibility').item.json.wpm }}",
+            "Typing Speed Accuracy - Monkeytype": "={{ $('Verify Token & Plausibility').item.json.accuracy }}",
+            "Typing Speed Submitted - Monkeytype": true,
+            "Typing Speed Submitted At - Monkeytype": "={{ $('Verify Token & Plausibility').item.json.submittedAt }}"
+          }
+        },
+        "options": {}
+      },
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "mih6ygbgIAbAPOgn",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "respond-200",
+      "name": "Respond 200 OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [1520, 320],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { status: 'submitted', recordId: $('Verify Token & Plausibility').item.json.recordId, wpm: $('Verify Token & Plausibility').item.json.wpm, accuracy: $('Verify Token & Plausibility').item.json.accuracy } }}",
+        "options": {
+          "responseCode": 200
+        }
+      }
+    },
+    {
+      "id": "respond-error",
+      "name": "Respond Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [860, 460],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { error: $json.error, recordId: $json.recordId } }}",
+        "options": {
+          "responseCode": "={{ $json._statusCode }}"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [{ "node": "Verify Token & Plausibility", "type": "main", "index": 0 }]
+      ]
+    },
+    "Verify Token & Plausibility": {
+      "main": [[{ "node": "If Verified", "type": "main", "index": 0 }]]
+    },
+    "If Verified": {
+      "main": [
+        [{ "node": "Get Airtable Record", "type": "main", "index": 0 }],
+        [{ "node": "Respond Error", "type": "main", "index": 0 }]
+      ]
+    },
+    "Get Airtable Record": {
+      "main": [[{ "node": "If Already Submitted", "type": "main", "index": 0 }]]
+    },
+    "If Already Submitted": {
+      "main": [
+        [
+          {
+            "node": "Respond 409 Already Submitted",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [{ "node": "Update Airtable Record", "type": "main", "index": 0 }]
+      ]
+    },
+    "Update Airtable Record": {
+      "main": [[{ "node": "Respond 200 OK", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
