@@ -44,6 +44,8 @@ import { timerEvent } from "../events/timer";
 import objectHash from "object-hash";
 import * as AnalyticsController from "../controllers/analytics-controller";
 import { getAuthenticatedUser } from "../firebase";
+import { getApplicantToken } from "../applicant/token";
+import * as ApplicantReporter from "../applicant/reporter";
 import * as ConnectionState from "../legacy-states/connection";
 import { highlight } from "../events/keymap";
 import * as LazyModeState from "../legacy-states/remember-lazy-mode";
@@ -1171,36 +1173,47 @@ export async function finish(difficultyFailed = false): Promise<void> {
 
   let savingResultPromise: ReturnType<typeof saveResult> =
     Promise.resolve(null);
-  const user = getAuthenticatedUser();
-  if (user !== null) {
-    // logged in
-    if (dontSave) {
-      void AnalyticsController.log("testCompletedInvalid");
-    } else {
+  const applicantToken = getApplicantToken();
+  if (applicantToken !== null) {
+    if (!dontSave) {
       TestStats.resetIncomplete();
-
-      if (!completedEvent.bailedOut) {
-        const challenge = ChallengeContoller.verify(completedEvent);
-        if (challenge !== null) completedEvent.challenge = challenge;
-      }
-
-      completedEvent.uid = user.uid;
-
-      savingResultPromise = saveResult(completedEvent, false);
-      void savingResultPromise.then((response) => {
-        if (response && response.status === 200) {
-          void AnalyticsController.log("testCompleted");
-        }
-      });
+      savingResultPromise = ApplicantReporter.send(
+        completedEvent,
+        applicantToken,
+      );
     }
   } else {
-    // logged out
-    void AnalyticsController.log("testCompletedNoLogin");
-    if (!dontSave) {
-      // if its valid save it for later
-      notSignedInLastResult = completedEvent;
+    const user = getAuthenticatedUser();
+    if (user !== null) {
+      // logged in
+      if (dontSave) {
+        void AnalyticsController.log("testCompletedInvalid");
+      } else {
+        TestStats.resetIncomplete();
+
+        if (!completedEvent.bailedOut) {
+          const challenge = ChallengeContoller.verify(completedEvent);
+          if (challenge !== null) completedEvent.challenge = challenge;
+        }
+
+        completedEvent.uid = user.uid;
+
+        savingResultPromise = saveResult(completedEvent, false);
+        void savingResultPromise.then((response) => {
+          if (response && response.status === 200) {
+            void AnalyticsController.log("testCompleted");
+          }
+        });
+      }
+    } else {
+      // logged out
+      void AnalyticsController.log("testCompletedNoLogin");
+      if (!dontSave) {
+        // if its valid save it for later
+        notSignedInLastResult = completedEvent;
+      }
+      dontSave = true;
     }
-    dontSave = true;
   }
 
   const resultUpdatePromise = Result.update(

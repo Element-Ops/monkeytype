@@ -1,0 +1,90 @@
+body.applicant-mode mount[data-component="header"],
+body.applicant-mode mount[data-component="footer"],
+body.applicant-mode mount[data-component="devtools"],
+body.applicant-mode #solidmodals,
+body.applicant-mode #solidpopups,
+body.applicant-mode #popups,
+body.applicant-mode #commandLine,
+body.applicant-mode #commandLineMobileButton,
+body.applicant-mode [data-ui-element="testConfig"],
+body.applicant-mode #ad-vertical-left-wrapper,
+body.applicant-mode #ad-vertical-right-wrapper,
+body.applicant-mode #ad-footer-wrapper,
+body.applicant-mode #ad-footer-small-wrapper,
+body.applicant-mode .pageLogin,
+body.applicant-mode .pageAccount,
+body.applicant-mode .pageProfile,
+body.applicant-mode .pageProfileSearch,
+body.applicant-mode .pageLeaderboards,
+body.applicant-mode .pageAccountSettings,
+body.applicant-mode .pageFriends,
+body.applicant-mode .pageAbout {
+  display: none !important;
+}
+
+body.applicant-mode .page.pageTest {
+  margin-top: 4rem;
+}
+
+#applicantOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  padding: 2rem;
+}
+
+#applicantOverlay .applicantOverlayCard {
+  background: var(--bg-color, #323437);
+  color: var(--main-color, #e2b714);
+  border-radius: 0.75rem;
+  padding: 2.5rem 3rem;
+  max-width: 32rem;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 1.25rem 3rem rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--sub-color, #646669);
+}
+
+#applicantOverlay .applicantOverlayCard h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+#applicantOverlay .applicantOverlayCard p {
+  margin: 0.5rem 0;
+  color: var(--text-color, #d1d0c5);
+  line-height: 1.5;
+}
+
+#applicantOverlay .applicantOverlayCard .applicantStats {
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 0.5rem;
+  font-family: var(--font, "Roboto Mono", monospace);
+  font-size: 1.1rem;
+  color: var(--main-color, #e2b714);
+}
+
+#applicantOverlay .applicantOverlaySpinner {
+  display: inline-block;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 2px solid var(--sub-color, #646669);
+  border-top-color: var(--main-color, #e2b714);
+  border-radius: 50%;
+  animation: applicantSpin 0.8s linear infinite;
+  margin-bottom: 0.5rem;
+}
+
+@keyframes applicantSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}

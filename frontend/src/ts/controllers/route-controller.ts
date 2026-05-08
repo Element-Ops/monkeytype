@@ -8,6 +8,7 @@ import * as TestState from "../test/test-state";
 import { showNoticeNotification } from "../states/notifications";
 import { navigationEvent, type NavigateOptions } from "../events/navigation";
 import { authEvent } from "../events/auth";
+import { getApplicantToken } from "../applicant/token";
 
 //source: https://www.youtube.com/watch?v=OstALBk-jTc
 // https://www.youtube.com/watch?v=OstALBk-jTc
@@ -209,6 +210,10 @@ export async function navigate(
 }
 
 async function router(options = {} as NavigateOptions): Promise<void> {
+  if (getApplicantToken() !== null && location.pathname !== "/") {
+    history.replaceState(null, "", "/" + location.search);
+  }
+
   const matches = routes.map((r) => {
     return {
       route: r,

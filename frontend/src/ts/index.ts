@@ -46,6 +46,8 @@ import { mountComponents } from "./components/mount";
 import "./ready";
 import { setVersion } from "./states/core";
 import { loadFromLocalStorage } from "./config/lifecycle";
+import { isApplicantMode } from "./applicant/token";
+import * as Applicant from "./applicant/boot";
 
 import "./input/hotkeys";
 
@@ -69,38 +71,51 @@ Object.defineProperty(window, "Math", {
 });
 
 applyEngineSettings();
-void loadFromLocalStorage();
-void fetchLatestVersion().then((data) => {
-  if (data === null) return;
-  setVersion(data);
-});
 
-Focus.set(true, true);
-const accepted = Cookies.getAcceptedCookies();
-if (accepted === null) {
-  CookiesModal.show();
-}
-void init(onAuthStateChanged).then(() => {
-  if (accepted !== null) {
-    Cookies.activateWhatsAccepted();
+if (isApplicantMode()) {
+  Focus.set(true, true);
+  void loadFromLocalStorage().then(() => {
+    Applicant.boot();
+  });
+  // resolve authPromise so ready.ts unhides #app
+  void init(async () => {
+    /* applicant mode: ignore auth state */
+  });
+  mountComponents();
+} else {
+  void loadFromLocalStorage();
+  void fetchLatestVersion().then((data) => {
+    if (data === null) return;
+    setVersion(data);
+  });
+
+  Focus.set(true, true);
+  const accepted = Cookies.getAcceptedCookies();
+  if (accepted === null) {
+    CookiesModal.show();
   }
-});
+  void init(onAuthStateChanged).then(() => {
+    if (accepted !== null) {
+      Cookies.activateWhatsAccepted();
+    }
+  });
 
-addToGlobal({
-  snapshot: DB.getSnapshot,
-  config: Config,
-  glarsesMode: enable,
-  stats: TestStats.getStats,
-  replay: Replay.getReplayExport,
-  enableTimerDebug: TestTimer.enableTimerDebug,
-  getTimerStats: TestTimer.getTimerStats,
-  toggleSmoothedBurst: Result.toggleSmoothedBurst,
-  egVideoListener: egVideoListener,
-  toggleDebugLogs: Logger.toggleDebugLogs,
-  toggleSentryDebug: Sentry.toggleDebug,
-  qs: qs,
-  qsa: qsa,
-  qsr: qsr,
-});
+  addToGlobal({
+    snapshot: DB.getSnapshot,
+    config: Config,
+    glarsesMode: enable,
+    stats: TestStats.getStats,
+    replay: Replay.getReplayExport,
+    enableTimerDebug: TestTimer.enableTimerDebug,
+    getTimerStats: TestTimer.getTimerStats,
+    toggleSmoothedBurst: Result.toggleSmoothedBurst,
+    egVideoListener: egVideoListener,
+    toggleDebugLogs: Logger.toggleDebugLogs,
+    toggleSentryDebug: Sentry.toggleDebug,
+    qs: qs,
+    qsa: qsa,
+    qsr: qsr,
+  });
 
-mountComponents();
+  mountComponents();
+}

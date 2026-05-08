@@ -84,7 +84,8 @@ node_modules_bak/
 serviceAccountKey*.json
 !docker/serviceAccountKey-example.json
 frontend/src/ts/constants/firebase-config.ts
-frontend/src/ts/constants/firebase-config-live.ts
+# firebase-config-live.ts is intentionally tracked in this fork — applicant mode skips Firebase init
+!frontend/src/ts/constants/firebase-config-live.ts
 
 #generated files
 dist/
