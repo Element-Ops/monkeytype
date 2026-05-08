@@ -5,6 +5,6 @@
     "buildCommand": "pnpm install --frozen-lockfile --config.engine-strict=false && pnpm turbo run build --filter @monkeytype/frontend"
   },
   "deploy": {
-    "staticPublishPath": "frontend/dist"
+    "startCommand": "npx -y serve -s frontend/dist -l ${PORT:-3000} --cors --no-clipboard"
   }
 }
