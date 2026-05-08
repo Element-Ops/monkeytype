@@ -8,7 +8,7 @@ backend/node_modules
 .firebaserc
 serviceAccountKey*.json
 frontend/src/ts/constants/firebase-config.ts
-frontend/src/ts/constants/firebase-config-live.ts
+# firebase-config-live.ts is intentionally tracked + shipped in this fork (applicant mode skips Firebase init)
 
 #frontend
 frontend/.env
