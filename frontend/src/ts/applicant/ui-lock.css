@@ -27,6 +27,23 @@ body.applicant-mode .page.pageTest {
   margin-top: 4rem;
 }
 
+body.applicant-mode #restartTestButton {
+  display: none !important;
+}
+
+#applicantToolbar {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 9000;
+  display: none;
+  gap: 0.5rem;
+}
+
+body.applicant-mode-practice #applicantToolbar {
+  display: flex;
+}
+
 #applicantOverlay {
   position: fixed;
   inset: 0;

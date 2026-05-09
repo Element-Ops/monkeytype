@@ -1,0 +1,116 @@
+{
+  "name": "Applicant Typing - Backfill URLs",
+  "description": "Manual trigger. Finds Recruitment records with Status=Applicant - Needs Review AND empty Typing Speed URL - Monkeytype, then POSTs each {recordId, fullName} to the existing generate-url webhook so the same code path runs. Slack summary at end.",
+  "nodes": [
+    {
+      "id": "manual-trigger",
+      "name": "When clicked",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [200, 300],
+      "parameters": {}
+    },
+    {
+      "id": "search-needs-review",
+      "name": "Search Recruitment",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [420, 300],
+      "parameters": {
+        "resource": "record",
+        "operation": "search",
+        "base": { "__rl": true, "value": "appa28zyvdbF534Xl", "mode": "id" },
+        "table": { "__rl": true, "value": "tblsDdMFkapAv604l", "mode": "id" },
+        "filterByFormula": "AND({Status} = 'Applicant - Needs Review', {Typing Speed URL - Monkeytype} = BLANK())",
+        "returnAll": true,
+        "options": { "fields": ["Full Name"] }
+      },
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "REPLACE_WITH_YOUR_AIRTABLE_CREDENTIAL_ID",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    },
+    {
+      "id": "post-generate-url",
+      "name": "Issue URL via generate-url webhook",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [640, 300],
+      "parameters": {
+        "url": "https://n8n.elementops.it.com/webhook/applicant-typing-generate-url",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"recordId\": $json.id, \"fullName\": $json.fields[\"Full Name\"] || \"\" }",
+        "options": {}
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "aggregate-results",
+      "name": "Summarize",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [860, 300],
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\nconst total = items.length;\nlet ok = 0;\nconst failures = [];\nfor (const item of items) {\n  const j = item.json;\n  if (j && j.status === 'ok') {\n    ok += 1;\n  } else {\n    failures.push({\n      recordId: j?.recordId || '(unknown)',\n      error: j?.error || JSON.stringify(j)\n    });\n  }\n}\nreturn [{ json: { total: total, ok: ok, failed: failures.length, failures: failures } }];"
+      }
+    },
+    {
+      "id": "notify-slack",
+      "name": "Notify Marc",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [1080, 300],
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C07PQUFD943",
+          "mode": "list",
+          "cachedResultName": "automation-alerts"
+        },
+        "text": "=:white_check_mark: Applicant Typing URL backfill complete\nTotal records processed: {{ $json.total }}\nURLs generated: {{ $json.ok }}\nFailed: {{ $json.failed }}\n\n{{ $json.failed > 0 ? '<@U07FK03BRC1> Failed records:\\n' + $json.failures.map(f => `• ${f.recordId}: ${f.error}`).join('\\n') : '' }}",
+        "otherOptions": {}
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "REPLACE_WITH_YOUR_SLACK_CREDENTIAL_ID",
+          "name": "ElementBot AccessToken"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "When clicked": {
+      "main": [[{ "node": "Search Recruitment", "type": "main", "index": 0 }]]
+    },
+    "Search Recruitment": {
+      "main": [
+        [
+          {
+            "node": "Issue URL via generate-url webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Issue URL via generate-url webhook": {
+      "main": [
+        [{ "node": "Summarize", "type": "main", "index": 0 }],
+        [{ "node": "Summarize", "type": "main", "index": 0 }]
+      ]
+    },
+    "Summarize": {
+      "main": [[{ "node": "Notify Marc", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "lsssyK7KqnqVzeJe"
+  }
+}

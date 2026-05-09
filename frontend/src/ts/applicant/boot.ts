@@ -2,6 +2,7 @@ import "./ui-lock.css";
 import { applyConfigLock } from "./config-lock";
 import { mountResultStates, setReporterState } from "./result-states";
 import { onReporterStateChange } from "./reporter";
+import { mountToolbar } from "./toolbar";
 import { navigationEvent } from "../events/navigation";
 
 function injectNoIndexMeta(): void {
@@ -17,6 +18,7 @@ export function boot(): void {
 
   applyConfigLock();
   mountResultStates();
+  mountToolbar();
 
   onReporterStateChange((s) => {
     setReporterState(s);

@@ -26,6 +26,11 @@ export function setSubmitting(): void {
   setState({ kind: "submitting" });
 }
 
+export function showIntro(): void {
+  setClosed(false);
+  setState({ kind: "intro" });
+}
+
 export function notifyPracticeComplete(wpm: number, acc: number): void {
   setClosed(false);
   setState({
