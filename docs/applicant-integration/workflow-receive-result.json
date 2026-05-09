@@ -16,14 +16,46 @@
       "onError": "continueRegularOutput"
     },
     {
-      "id": "verify",
-      "name": "Verify Token & Plausibility",
+      "id": "parse-token",
+      "name": "Parse Token",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [420, 300],
+      "position": [400, 300],
       "parameters": {
         "language": "javaScript",
-        "jsCode": "// HARDCODED SECRET — must match generate-url; replace via n8n UI; do not commit\nconst SECRET = 'REPLACE_WITH_32_PLUS_CHAR_HMAC_SECRET';\n\nconst enc = new TextEncoder();\n\nfunction fromBase64Url(b64url) {\n  const padded = b64url.replace(/-/g, '+').replace(/_/g, '/');\n  const padLen = (4 - padded.length % 4) % 4;\n  return atob(padded + '='.repeat(padLen));\n}\n\nfunction hexToBytes(hex) {\n  const bytes = new Uint8Array(hex.length / 2);\n  for (let i = 0; i < bytes.length; i++) {\n    bytes[i] = parseInt(hex.substr(i * 2, 2), 16);\n  }\n  return bytes;\n}\n\nasync function hmacVerify(secret, message, sigHex) {\n  if (!/^[0-9a-f]+$/i.test(sigHex) || sigHex.length % 2 !== 0) return false;\n  const key = await crypto.subtle.importKey(\n    'raw', enc.encode(secret),\n    { name: 'HMAC', hash: 'SHA-256' },\n    false, ['verify']\n  );\n  return crypto.subtle.verify('HMAC', key, hexToBytes(sigHex), enc.encode(message));\n}\n\nfunction out(obj) { return [{ json: obj }]; }\nfunction fail(code, message, extra) { return out(Object.assign({ _statusCode: code, error: message }, extra || {})); }\n\nconst inputJson = $input.first().json;\nconst body = inputJson.body || inputJson;\nconst token = body.token;\nconst result = body.result;\n\nif (!token || typeof token !== 'string') return fail(400, 'missing token');\nif (!result || typeof result !== 'object') return fail(400, 'missing result');\n\nconst dotIdx = token.lastIndexOf('.');\nif (dotIdx < 1) return fail(401, 'malformed token');\nconst tokenB64 = token.slice(0, dotIdx);\nconst sig = token.slice(dotIdx + 1);\n\nconst sigOk = await hmacVerify(SECRET, tokenB64, sig);\nif (!sigOk) return fail(401, 'invalid signature');\n\nlet payload;\ntry {\n  payload = JSON.parse(fromBase64Url(tokenB64));\n} catch (e) {\n  return fail(401, 'invalid payload');\n}\n\nconst recordId = payload.r;\nconst expiresAt = payload.e;\nconst now = Math.floor(Date.now() / 1000);\n\nif (!recordId || typeof recordId !== 'string' || !recordId.startsWith('rec')) {\n  return fail(401, 'invalid recordId in token');\n}\nif (typeof expiresAt !== 'number' || now > expiresAt) {\n  return fail(410, 'token expired', { recordId: recordId });\n}\n\n// Plausibility checks — reject any obviously cheated/scripted result\nconst issues = [];\nconst td = result.testDuration;\nif (typeof td !== 'number' || td < 55) issues.push('testDuration ' + td);\n\nlet charTotal = 0;\nif (Array.isArray(result.charStats)) {\n  charTotal = result.charStats.reduce(function(a, b) { return a + (typeof b === 'number' ? b : 0); }, 0);\n}\nif (charTotal < 150) issues.push('charTotal ' + charTotal);\n\nif (typeof result.wpm !== 'number' || result.wpm > 200) issues.push('wpm ' + result.wpm);\nif (typeof result.afkDuration !== 'number' || result.afkDuration >= 10) issues.push('afkDuration ' + result.afkDuration);\nif (typeof result.restartCount !== 'number' || result.restartCount > 3) issues.push('restartCount ' + result.restartCount);\n\nif (Array.isArray(result.keySpacing) && result.keySpacing.length > 5) {\n  const ks = result.keySpacing;\n  const mean = ks.reduce(function(a, b) { return a + b; }, 0) / ks.length;\n  const variance = ks.reduce(function(a, b) { return a + (b - mean) * (b - mean); }, 0) / ks.length;\n  if (variance < 1) issues.push('keySpacing variance ' + variance.toFixed(2));\n}\n\nif (issues.length > 0) {\n  return fail(422, 'plausibility: ' + issues.join('; '), { recordId: recordId });\n}\n\nconst wpm = Math.round(result.wpm * 10) / 10;\nconst acc = typeof result.acc === 'number' ? result.acc : 0;\n// Airtable percent field stores 0-1 (0.95 = 95%)\nconst accuracy = Math.round((acc / 100) * 1000) / 1000;\n\nreturn out({\n  _statusCode: 200,\n  recordId: recordId,\n  wpm: wpm,\n  accuracy: accuracy,\n  submittedAt: new Date().toISOString()\n});"
+        "jsCode": "function fromBase64Url(b64url) {\n  const padded = b64url.replace(/-/g, '+').replace(/_/g, '/');\n  const padLen = (4 - padded.length % 4) % 4;\n  return atob(padded + '='.repeat(padLen));\n}\n\nfunction fail(code, message) {\n  return [{ json: { _statusCode: code, error: message, tokenB64: '' } }];\n}\n\nconst inputJson = $input.first().json;\nconst body = inputJson.body || inputJson;\nconst token = body.token;\nconst result = body.result;\n\nif (!token || typeof token !== 'string') return fail(400, 'missing token');\nif (!result || typeof result !== 'object') return fail(400, 'missing result');\n\nconst dotIdx = token.lastIndexOf('.');\nif (dotIdx < 1) return fail(401, 'malformed token');\nconst tokenB64 = token.slice(0, dotIdx);\nconst sig = token.slice(dotIdx + 1);\n\nlet payload;\ntry {\n  payload = JSON.parse(fromBase64Url(tokenB64));\n} catch (e) {\n  return fail(401, 'invalid payload');\n}\n\nconst recordId = payload.r;\nconst expiresAt = payload.e;\n\nif (!recordId || typeof recordId !== 'string' || !recordId.startsWith('rec')) {\n  return fail(401, 'invalid recordId in token');\n}\nif (typeof expiresAt !== 'number') {\n  return fail(401, 'invalid expiresAt in token');\n}\n\nreturn [{ json: { _statusCode: 200, tokenB64: tokenB64, sig: sig, recordId: recordId, expiresAt: expiresAt, result: result } }];"
+      }
+    },
+    {
+      "id": "sign-expected",
+      "name": "Compute Expected Sig",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 2,
+      "position": [600, 300],
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA256",
+        "value": "={{ $json.tokenB64 }}",
+        "dataPropertyName": "expectedSig",
+        "encoding": "hex",
+        "binaryData": false
+      },
+      "credentials": {
+        "crypto": {
+          "id": "REPLACE_WITH_YOUR_CRYPTO_CREDENTIAL_ID",
+          "name": "Monkeytype HMAC"
+        }
+      }
+    },
+    {
+      "id": "verify-plausibility",
+      "name": "Verify & Plausibility",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [800, 300],
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "const item = $input.first().json;\n\n// Propagate parse failures\nif (item._statusCode !== 200) {\n  return [{ json: item }];\n}\n\nconst { tokenB64, sig, expectedSig, recordId, expiresAt, result } = item;\n\n// Constant-time string comparison\nif (typeof sig !== 'string' || typeof expectedSig !== 'string' || sig.length !== expectedSig.length) {\n  return [{ json: { _statusCode: 401, error: 'invalid signature', recordId: recordId } }];\n}\nlet diff = 0;\nfor (let i = 0; i < sig.length; i++) diff |= sig.charCodeAt(i) ^ expectedSig.charCodeAt(i);\nif (diff !== 0) {\n  return [{ json: { _statusCode: 401, error: 'invalid signature', recordId: recordId } }];\n}\n\nconst now = Math.floor(Date.now() / 1000);\nif (now > expiresAt) {\n  return [{ json: { _statusCode: 410, error: 'token expired', recordId: recordId } }];\n}\n\n// Plausibility checks — reject obviously cheated/scripted results\nconst issues = [];\nconst td = result.testDuration;\nif (typeof td !== 'number' || td < 55) issues.push('testDuration ' + td);\n\nlet charTotal = 0;\nif (Array.isArray(result.charStats)) {\n  charTotal = result.charStats.reduce(function(a, b) { return a + (typeof b === 'number' ? b : 0); }, 0);\n}\nif (charTotal < 150) issues.push('charTotal ' + charTotal);\n\nif (typeof result.wpm !== 'number' || result.wpm > 200) issues.push('wpm ' + result.wpm);\nif (typeof result.afkDuration !== 'number' || result.afkDuration >= 10) issues.push('afkDuration ' + result.afkDuration);\nif (typeof result.restartCount !== 'number' || result.restartCount > 3) issues.push('restartCount ' + result.restartCount);\n\nif (Array.isArray(result.keySpacing) && result.keySpacing.length > 5) {\n  const ks = result.keySpacing;\n  const mean = ks.reduce(function(a, b) { return a + b; }, 0) / ks.length;\n  const variance = ks.reduce(function(a, b) { return a + (b - mean) * (b - mean); }, 0) / ks.length;\n  if (variance < 1) issues.push('keySpacing variance ' + variance.toFixed(2));\n}\n\nif (issues.length > 0) {\n  return [{ json: { _statusCode: 422, error: 'plausibility: ' + issues.join('; '), recordId: recordId } }];\n}\n\nconst wpm = Math.round(result.wpm * 10) / 10;\nconst acc = typeof result.acc === 'number' ? result.acc : 0;\n// Airtable percent field stores 0-1 (0.95 = 95%)\nconst accuracy = Math.round((acc / 100) * 1000) / 1000;\n\nreturn [{ json: { _statusCode: 200, recordId: recordId, wpm: wpm, accuracy: accuracy, submittedAt: new Date().toISOString() } }];"
       }
     },
     {
@@ -31,7 +63,7 @@
       "name": "If Verified",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
-      "position": [640, 300],
+      "position": [1000, 300],
       "parameters": {
         "conditions": {
           "options": {
@@ -45,10 +77,7 @@
               "id": "check-200",
               "leftValue": "={{ $json._statusCode }}",
               "rightValue": 200,
-              "operator": {
-                "type": "number",
-                "operation": "equals"
-              }
+              "operator": { "type": "number", "operation": "equals" }
             }
           ],
           "combinator": "and"
@@ -61,26 +90,18 @@
       "name": "Get Airtable Record",
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 2.2,
-      "position": [860, 200],
+      "position": [1200, 200],
       "parameters": {
         "resource": "record",
         "operation": "get",
-        "base": {
-          "__rl": true,
-          "value": "appa28zyvdbF534Xl",
-          "mode": "id"
-        },
-        "table": {
-          "__rl": true,
-          "value": "tblsDdMFkapAv604l",
-          "mode": "id"
-        },
+        "base": { "__rl": true, "value": "appa28zyvdbF534Xl", "mode": "id" },
+        "table": { "__rl": true, "value": "tblsDdMFkapAv604l", "mode": "id" },
         "id": "={{ $json.recordId }}",
         "options": {}
       },
       "credentials": {
         "airtableTokenApi": {
-          "id": "mih6ygbgIAbAPOgn",
+          "id": "REPLACE_WITH_YOUR_AIRTABLE_CREDENTIAL_ID",
           "name": "Airtable Personal Access Token account"
         }
       },
@@ -91,7 +112,7 @@
       "name": "If Already Submitted",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
-      "position": [1080, 200],
+      "position": [1400, 200],
       "parameters": {
         "conditions": {
           "options": {
@@ -122,13 +143,11 @@
       "name": "Respond 409 Already Submitted",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.5,
-      "position": [1300, 80],
+      "position": [1600, 80],
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ { error: 'already submitted', recordId: $('Verify Token & Plausibility').item.json.recordId } }}",
-        "options": {
-          "responseCode": 409
-        }
+        "responseBody": "={{ { error: 'already submitted', recordId: $('Verify & Plausibility').item.json.recordId } }}",
+        "options": { "responseCode": 409 }
       }
     },
     {
@@ -136,38 +155,27 @@
       "name": "Update Airtable Record",
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 2.2,
-      "position": [1300, 320],
+      "position": [1600, 320],
       "parameters": {
         "operation": "update",
-        "base": {
-          "__rl": true,
-          "value": "appa28zyvdbF534Xl",
-          "mode": "id"
-        },
-        "table": {
-          "__rl": true,
-          "value": "tblsDdMFkapAv604l",
-          "mode": "id"
-        },
-        "id": {
-          "__rl": true,
-          "value": "={{ $('Verify Token & Plausibility').item.json.recordId }}",
-          "mode": "expression"
-        },
+        "base": { "__rl": true, "value": "appa28zyvdbF534Xl", "mode": "id" },
+        "table": { "__rl": true, "value": "tblsDdMFkapAv604l", "mode": "id" },
         "columns": {
           "mappingMode": "defineBelow",
+          "matchingColumns": ["id"],
           "value": {
-            "Typing Speed WPM - Monkeytype": "={{ $('Verify Token & Plausibility').item.json.wpm }}",
-            "Typing Speed Accuracy - Monkeytype": "={{ $('Verify Token & Plausibility').item.json.accuracy }}",
+            "id": "={{ $('Verify & Plausibility').item.json.recordId }}",
+            "Typing Speed WPM - Monkeytype": "={{ $('Verify & Plausibility').item.json.wpm }}",
+            "Typing Speed Accuracy - Monkeytype": "={{ $('Verify & Plausibility').item.json.accuracy }}",
             "Typing Speed Submitted - Monkeytype": true,
-            "Typing Speed Submitted At - Monkeytype": "={{ $('Verify Token & Plausibility').item.json.submittedAt }}"
+            "Typing Speed Submitted At - Monkeytype": "={{ $('Verify & Plausibility').item.json.submittedAt }}"
           }
         },
         "options": {}
       },
       "credentials": {
         "airtableTokenApi": {
-          "id": "mih6ygbgIAbAPOgn",
+          "id": "REPLACE_WITH_YOUR_AIRTABLE_CREDENTIAL_ID",
           "name": "Airtable Personal Access Token account"
         }
       },
@@ -178,13 +186,11 @@
       "name": "Respond 200 OK",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.5,
-      "position": [1520, 320],
+      "position": [1800, 320],
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ { status: 'submitted', recordId: $('Verify Token & Plausibility').item.json.recordId, wpm: $('Verify Token & Plausibility').item.json.wpm, accuracy: $('Verify Token & Plausibility').item.json.accuracy } }}",
-        "options": {
-          "responseCode": 200
-        }
+        "responseBody": "={{ { status: 'submitted', recordId: $('Verify & Plausibility').item.json.recordId, wpm: $('Verify & Plausibility').item.json.wpm, accuracy: $('Verify & Plausibility').item.json.accuracy } }}",
+        "options": { "responseCode": 200 }
       }
     },
     {
@@ -192,23 +198,27 @@
       "name": "Respond Error",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.5,
-      "position": [860, 460],
+      "position": [1200, 460],
       "parameters": {
         "respondWith": "json",
         "responseBody": "={{ { error: $json.error, recordId: $json.recordId } }}",
-        "options": {
-          "responseCode": "={{ $json._statusCode }}"
-        }
+        "options": { "responseCode": "={{ $json._statusCode }}" }
       }
     }
   ],
   "connections": {
     "Webhook": {
+      "main": [[{ "node": "Parse Token", "type": "main", "index": 0 }]]
+    },
+    "Parse Token": {
+      "main": [[{ "node": "Compute Expected Sig", "type": "main", "index": 0 }]]
+    },
+    "Compute Expected Sig": {
       "main": [
-        [{ "node": "Verify Token & Plausibility", "type": "main", "index": 0 }]
+        [{ "node": "Verify & Plausibility", "type": "main", "index": 0 }]
       ]
     },
-    "Verify Token & Plausibility": {
+    "Verify & Plausibility": {
       "main": [[{ "node": "If Verified", "type": "main", "index": 0 }]]
     },
     "If Verified": {
@@ -236,7 +246,5 @@
       "main": [[{ "node": "Respond 200 OK", "type": "main", "index": 0 }]]
     }
   },
-  "settings": {
-    "executionOrder": "v1"
-  }
+  "settings": { "executionOrder": "v1" }
 }

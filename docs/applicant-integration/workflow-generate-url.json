@@ -16,39 +16,46 @@
       "onError": "continueRegularOutput"
     },
     {
-      "id": "build-token",
-      "name": "Build Token",
+      "id": "build-payload",
+      "name": "Build Payload",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [480, 300],
+      "position": [440, 300],
       "parameters": {
         "language": "javaScript",
-        "jsCode": "// HARDCODED SECRET — replace via n8n UI; do not commit\nconst SECRET = 'REPLACE_WITH_32_PLUS_CHAR_HMAC_SECRET';\nconst BASE_URL = 'https://typing.elementops.it.com';\nconst TTL_DAYS = 30;\n\nconst enc = new TextEncoder();\n\nfunction toBase64Url(str) {\n  return btoa(str).replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');\n}\n\nfunction bytesToHex(bytes) {\n  return [...new Uint8Array(bytes)].map(b => b.toString(16).padStart(2, '0')).join('');\n}\n\nasync function hmacSha256Hex(secret, message) {\n  const key = await crypto.subtle.importKey(\n    'raw', enc.encode(secret),\n    { name: 'HMAC', hash: 'SHA-256' },\n    false, ['sign']\n  );\n  const sig = await crypto.subtle.sign('HMAC', key, enc.encode(message));\n  return bytesToHex(sig);\n}\n\nconst body = $input.first().json.body || $input.first().json;\nconst recordId = body.recordId || body.record_id;\n\nif (!recordId || typeof recordId !== 'string' || !recordId.startsWith('rec')) {\n  throw new Error('missing or invalid recordId in webhook body');\n}\n\nconst nowSec = Math.floor(Date.now() / 1000);\nconst expiresAtSec = nowSec + TTL_DAYS * 86400;\nconst nonceBytes = new Uint8Array(8);\ncrypto.getRandomValues(nonceBytes);\nconst nonce = bytesToHex(nonceBytes);\n\nconst payload = { r: recordId, e: expiresAtSec, n: nonce };\nconst tokenB64 = toBase64Url(JSON.stringify(payload));\nconst sig = await hmacSha256Hex(SECRET, tokenB64);\nconst token = tokenB64 + '.' + sig;\nconst url = BASE_URL + '/?t=' + token;\n\nreturn [{\n  json: {\n    recordId: recordId,\n    token: token,\n    url: url,\n    expiresAt: new Date(expiresAtSec * 1000).toISOString(),\n    generatedAt: new Date(nowSec * 1000).toISOString()\n  }\n}];"
+        "jsCode": "const TTL_DAYS = 30;\nconst body = $input.first().json.body || $input.first().json;\nconst recordId = body.recordId || body.record_id;\n\nif (!recordId || typeof recordId !== 'string' || !recordId.startsWith('rec')) {\n  throw new Error('missing or invalid recordId in webhook body');\n}\n\nconst nowSec = Math.floor(Date.now() / 1000);\nconst expiresAtSec = nowSec + TTL_DAYS * 86400;\nconst nonce = Date.now().toString(36) + Math.random().toString(36).slice(2, 10);\n\nconst payload = { r: recordId, e: expiresAtSec, n: nonce };\n\nfunction toBase64Url(str) {\n  return btoa(str).replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');\n}\n\nconst tokenB64 = toBase64Url(JSON.stringify(payload));\n\nreturn [{\n  json: {\n    recordId: recordId,\n    tokenB64: tokenB64,\n    expiresAt: new Date(expiresAtSec * 1000).toISOString(),\n    generatedAt: new Date(nowSec * 1000).toISOString()\n  }\n}];"
       }
     },
     {
-      "id": "datatable-insert",
-      "name": "Insert Token Row",
-      "type": "n8n-nodes-base.dataTable",
-      "typeVersion": 1.1,
-      "position": [720, 300],
+      "id": "sign-token",
+      "name": "Sign Token",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 2,
+      "position": [640, 300],
       "parameters": {
-        "resource": "row",
-        "operation": "insert",
-        "dataTableId": {
-          "__rl": true,
-          "value": "Yb9NT9DUmiMhXhks",
-          "mode": "id"
-        },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "record_id": "={{ $json.recordId }}",
-            "token": "={{ $json.token }}",
-            "expires_at": "={{ $json.expiresAt }}",
-            "generated_at": "={{ $json.generatedAt }}"
-          }
+        "action": "hmac",
+        "type": "SHA256",
+        "value": "={{ $json.tokenB64 }}",
+        "dataPropertyName": "sig",
+        "encoding": "hex",
+        "binaryData": false
+      },
+      "credentials": {
+        "crypto": {
+          "id": "REPLACE_WITH_YOUR_CRYPTO_CREDENTIAL_ID",
+          "name": "Monkeytype HMAC"
         }
+      }
+    },
+    {
+      "id": "build-url",
+      "name": "Build URL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [840, 300],
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "const BASE_URL = 'https://typing.elementops.it.com';\nconst item = $input.first().json;\nconst token = item.tokenB64 + '.' + item.sig;\nreturn [{\n  json: {\n    recordId: item.recordId,\n    token: token,\n    url: BASE_URL + '/?t=' + token,\n    expiresAt: item.expiresAt,\n    generatedAt: item.generatedAt\n  }\n}];"
       }
     },
     {
@@ -56,7 +63,7 @@
       "name": "Update Airtable Record",
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 2.2,
-      "position": [960, 300],
+      "position": [1040, 300],
       "parameters": {
         "operation": "update",
         "base": {
@@ -69,36 +76,58 @@
           "value": "tblsDdMFkapAv604l",
           "mode": "id"
         },
-        "id": {
-          "__rl": true,
-          "value": "={{ $('Build Token').item.json.recordId }}",
-          "mode": "expression"
-        },
         "columns": {
           "mappingMode": "defineBelow",
+          "matchingColumns": ["id"],
           "value": {
-            "Typing Speed URL - Monkeytype": "={{ $('Build Token').item.json.url }}"
+            "id": "={{ $json.recordId }}",
+            "Typing Speed URL - Monkeytype": "={{ $json.url }}"
           }
         },
         "options": {}
       },
       "credentials": {
         "airtableTokenApi": {
-          "id": "mih6ygbgIAbAPOgn",
+          "id": "REPLACE_WITH_YOUR_AIRTABLE_CREDENTIAL_ID",
           "name": "Airtable Personal Access Token account"
         }
       },
       "onError": "continueRegularOutput"
     },
     {
+      "id": "datatable-insert",
+      "name": "Insert Token Row",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [1240, 300],
+      "parameters": {
+        "resource": "row",
+        "operation": "insert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_YOUR_DATATABLE_ID",
+          "mode": "id"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "record_id": "={{ $('Build URL').item.json.recordId }}",
+            "token": "={{ $('Build URL').item.json.token }}",
+            "expires_at": "={{ $('Build URL').item.json.expiresAt }}",
+            "generated_at": "={{ $('Build URL').item.json.generatedAt }}"
+          }
+        }
+      }
+    },
+    {
       "id": "respond",
       "name": "Respond OK",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.5,
-      "position": [1200, 300],
+      "position": [1440, 300],
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ { status: 'ok', recordId: $('Build Token').item.json.recordId, url: $('Build Token').item.json.url } }}",
+        "responseBody": "={{ { status: 'ok', recordId: $('Build URL').item.json.recordId, url: $('Build URL').item.json.url } }}",
         "options": {
           "responseCode": 200
         }
@@ -107,21 +136,25 @@
   ],
   "connections": {
     "Webhook": {
-      "main": [[{ "node": "Build Token", "type": "main", "index": 0 }]]
+      "main": [[{ "node": "Build Payload", "type": "main", "index": 0 }]]
     },
-    "Build Token": {
-      "main": [[{ "node": "Insert Token Row", "type": "main", "index": 0 }]]
+    "Build Payload": {
+      "main": [[{ "node": "Sign Token", "type": "main", "index": 0 }]]
     },
-    "Insert Token Row": {
+    "Sign Token": {
+      "main": [[{ "node": "Build URL", "type": "main", "index": 0 }]]
+    },
+    "Build URL": {
       "main": [
         [{ "node": "Update Airtable Record", "type": "main", "index": 0 }]
       ]
     },
     "Update Airtable Record": {
+      "main": [[{ "node": "Insert Token Row", "type": "main", "index": 0 }]]
+    },
+    "Insert Token Row": {
       "main": [[{ "node": "Respond OK", "type": "main", "index": 0 }]]
     }
   },
-  "settings": {
-    "executionOrder": "v1"
-  }
+  "settings": { "executionOrder": "v1" }
 }
