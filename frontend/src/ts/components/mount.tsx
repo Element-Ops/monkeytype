@@ -2,6 +2,7 @@ import { QueryClientProvider } from "@tanstack/solid-query";
 import { JSXElement } from "solid-js";
 import { render } from "solid-js/web";
 
+import { isApplicantMode } from "../applicant/token";
 import { queryClient } from "../queries";
 import { qsa } from "../utils/dom";
 import { Theme } from "./core/Theme";
@@ -53,8 +54,14 @@ function mountToMountpoint(name: string, component: () => JSXElement): void {
   }
 }
 
+// Applicant mode only needs theme (CSS variables). Skipping Header/Footer/etc.
+// avoids firing useQuery effects that hit the BACKEND_URL placeholder.
+const APPLICANT_MOUNTS = new Set(["theme"]);
+
 export function mountComponents(): void {
+  const applicant = isApplicantMode();
   for (const [query, component] of Object.entries(components)) {
+    if (applicant && !APPLICANT_MOUNTS.has(query)) continue;
     mountToMountpoint(`mount[data-component=${query}]`, component);
   }
 }
