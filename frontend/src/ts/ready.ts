@@ -7,6 +7,7 @@ import { authPromise } from "./firebase";
 import { animate } from "animejs";
 import { onDOMReady, qs } from "./utils/dom";
 import { isDevEnvironment } from "./utils/env";
+import { isApplicantMode } from "./applicant/token";
 
 onDOMReady(async () => {
   await configLoadPromise;
@@ -17,7 +18,9 @@ onDOMReady(async () => {
   qs("body")?.setStyle({
     transition: "background .25s, transform .05s",
   });
-  MerchBanner.showIfNotClosedBefore();
+  if (!isApplicantMode()) {
+    MerchBanner.showIfNotClosedBefore();
+  }
 
   const app = document.querySelector("#app") as HTMLElement;
   app?.classList.remove("hidden");
@@ -26,7 +29,9 @@ onDOMReady(async () => {
     duration: Misc.applyReducedMotion(250),
   });
 
-  void ServerConfiguration.sync();
+  if (!isApplicantMode()) {
+    void ServerConfiguration.sync();
+  }
 
   MonkeyPower.init();
 

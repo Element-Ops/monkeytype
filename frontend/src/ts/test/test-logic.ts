@@ -46,6 +46,11 @@ import * as AnalyticsController from "../controllers/analytics-controller";
 import { getAuthenticatedUser } from "../firebase";
 import { getApplicantToken } from "../applicant/token";
 import * as ApplicantReporter from "../applicant/reporter";
+import { getApplicantTestMode } from "../applicant/mode";
+import {
+  notifyPracticeComplete,
+  setSubmitting as setApplicantSubmitting,
+} from "../applicant/result-states";
 import * as ConnectionState from "../legacy-states/connection";
 import { highlight } from "../events/keymap";
 import * as LazyModeState from "../legacy-states/remember-lazy-mode";
@@ -1177,10 +1182,16 @@ export async function finish(difficultyFailed = false): Promise<void> {
   if (applicantToken !== null) {
     if (!dontSave) {
       TestStats.resetIncomplete();
-      savingResultPromise = ApplicantReporter.send(
-        completedEvent,
-        applicantToken,
-      );
+      if (getApplicantTestMode() === "real") {
+        setApplicantSubmitting();
+        savingResultPromise = ApplicantReporter.send(
+          completedEvent,
+          applicantToken,
+        );
+      } else {
+        // practice mode — show overlay with score, do not submit
+        notifyPracticeComplete(completedEvent.wpm, completedEvent.acc);
+      }
     }
   } else {
     const user = getAuthenticatedUser();

@@ -8,7 +8,7 @@ const WEBHOOK_URL = import.meta.env["VITE_N8N_RESULT_WEBHOOK_URL"] as
 const RETRY_DELAYS_MS = [1000, 3000, 9000];
 
 export type ReporterResult =
-  | { status: "submitted" }
+  | { status: "submitted"; wpm: number; acc: number }
   | { status: "expired" }
   | { status: "duplicate" }
   | { status: "rejected"; reason?: string }
@@ -73,7 +73,11 @@ export async function send(
     const res = await postOnce(body);
 
     if (res.ok) {
-      notify({ status: "submitted" });
+      notify({
+        status: "submitted",
+        wpm: Math.round(completedEvent.wpm * 10) / 10,
+        acc: Math.round(completedEvent.acc * 10) / 10,
+      });
       return null;
     }
 

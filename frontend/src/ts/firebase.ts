@@ -25,6 +25,7 @@ import {
 import { promiseWithResolvers } from "./utils/misc";
 import { isDevEnvironment } from "./utils/env";
 import { createErrorMessage } from "./utils/error";
+import { isApplicantMode } from "./applicant/token";
 
 import {
   Analytics as AnalyticsType,
@@ -50,6 +51,11 @@ const { promise: authPromise, resolve: resolveAuthPromise } =
   promiseWithResolvers();
 
 export async function init(callback: ReadyCallback): Promise<void> {
+  if (isApplicantMode()) {
+    setUserState(null);
+    resolveAuthPromise();
+    return;
+  }
   try {
     let firebaseConfig: FirebaseOptions | null;
 

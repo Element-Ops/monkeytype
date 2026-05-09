@@ -4,8 +4,16 @@ import { mountResultStates, setReporterState } from "./result-states";
 import { onReporterStateChange } from "./reporter";
 import { navigationEvent } from "../events/navigation";
 
+function injectNoIndexMeta(): void {
+  const meta = document.createElement("meta");
+  meta.name = "robots";
+  meta.content = "noindex,nofollow";
+  document.head.appendChild(meta);
+}
+
 export function boot(): void {
   document.body.classList.add("applicant-mode");
+  injectNoIndexMeta();
 
   applyConfigLock();
   mountResultStates();
