@@ -43,7 +43,7 @@
         "method": "POST",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={ \"recordId\": $json.id, \"fullName\": $json.fields[\"Full Name\"] || \"\" }",
+        "jsonBody": "={{ JSON.stringify({ recordId: $json.id, fullName: ($json.fields && $json.fields['Full Name']) || '' }) }}",
         "options": {}
       },
       "onError": "continueErrorOutput"
