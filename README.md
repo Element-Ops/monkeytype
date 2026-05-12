@@ -1,3 +1,5 @@
+> 🟡 **Element Ops fork** — this repo customizes upstream Monkeytype for applicant typing assessments. New devs: start at [ONBOARDING.md](./ONBOARDING.md). Operational docs in [docs/applicant-integration/](./docs/applicant-integration/).
+
 [![](https://github.com/monkeytypegame/monkeytype/blob/master/frontend/static/images/githubbanner2.png?raw=true)](https://monkeytype.com/)
 <br />
 
