@@ -9,6 +9,7 @@ import { getApplicantName } from "./token";
 
 type State =
   | { kind: "intro" }
+  | { kind: "confirm-real" }
   | { kind: "submitting" }
   | { kind: "success"; wpm: number; acc: number }
   | { kind: "practice-complete"; wpm: number; acc: number }
@@ -18,6 +19,7 @@ type State =
   | { kind: "network-failure"; wpm: number; acc: number; raw: number };
 
 const [state, setState] = createSignal<State>({ kind: "intro" });
+const [previousState, setPreviousState] = createSignal<State | null>(null);
 const [closed, setClosed] = createSignal(false);
 const [secondsLeft, setSecondsLeft] = createSignal<number | null>(null);
 
@@ -66,8 +68,20 @@ const RECRUITER_EMAIL =
 
 function startTest(mode: "practice" | "real"): void {
   setApplicantTestMode(mode);
+  setPreviousState(null);
   setClosed(true);
   restartTestEvent.dispatch({});
+}
+
+function requestRealTest(): void {
+  setPreviousState(state());
+  setState({ kind: "confirm-real" });
+}
+
+function cancelRealTest(): void {
+  const prev = previousState();
+  setPreviousState(null);
+  setState(prev ?? { kind: "intro" });
 }
 
 function dismiss(): void {
@@ -113,6 +127,11 @@ function ApplicantOverlay(): JSX.Element {
                 Take a 1-minute typing test. Feel free to try the practice test
                 first before taking the real one.
               </p>
+              <div class="applicantWarning">
+                <strong>You only get one attempt at the actual test.</strong>{" "}
+                Please start recording yourself with Loom before clicking
+                &ldquo;Take Actual Typing Test&rdquo;.
+              </div>
               <p class="applicantSubtle">
                 Practice runs the same test but isn&apos;t recorded. Only the
                 real test counts.
@@ -128,9 +147,38 @@ function ApplicantOverlay(): JSX.Element {
                 <button
                   type="button"
                   class="applicantBtn applicantBtnPrimary"
-                  onClick={() => startTest("real")}
+                  onClick={requestRealTest}
                 >
                   Take Actual Typing Test
+                </button>
+              </div>
+            </Match>
+
+            <Match when={state().kind === "confirm-real"}>
+              <h2>Ready to take the actual test?</h2>
+              <p>This is your only attempt. Before you start, make sure:</p>
+              <ul class="applicantChecklist">
+                <li>You&apos;re recording yourself on Loom</li>
+                <li>You&apos;re in a quiet environment</li>
+                <li>You&apos;re ready to focus for 60 seconds</li>
+              </ul>
+              <p class="applicantSubtle">
+                Your result will be submitted automatically when the test ends.
+              </p>
+              <div class="applicantButtonRow">
+                <button
+                  type="button"
+                  class="applicantBtn applicantBtnSecondary"
+                  onClick={cancelRealTest}
+                >
+                  Not yet
+                </button>
+                <button
+                  type="button"
+                  class="applicantBtn applicantBtnPrimary"
+                  onClick={() => startTest("real")}
+                >
+                  Yes, start the test
                 </button>
               </div>
             </Match>
@@ -195,7 +243,7 @@ function ApplicantOverlay(): JSX.Element {
                       <button
                         type="button"
                         class="applicantBtn applicantBtnPrimary"
-                        onClick={() => startTest("real")}
+                        onClick={requestRealTest}
                       >
                         Take Real Test
                       </button>

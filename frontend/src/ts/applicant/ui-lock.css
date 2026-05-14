@@ -113,6 +113,46 @@ body.applicant-mode-practice #applicantToolbar {
   margin-top: 0.25rem;
 }
 
+#applicantOverlay .applicantWarning {
+  margin: 1rem 0;
+  padding: 0.85rem 1rem;
+  background: rgba(226, 183, 20, 0.08);
+  border: 1px solid var(--main-color, #e2b714);
+  border-radius: 0.5rem;
+  color: var(--text-color, #d1d0c5);
+  font-size: 0.95rem;
+  line-height: 1.5;
+  text-align: left;
+}
+
+#applicantOverlay .applicantWarning strong {
+  color: var(--main-color, #e2b714);
+  font-weight: 600;
+}
+
+#applicantOverlay .applicantChecklist {
+  list-style: none;
+  padding: 0;
+  margin: 1rem auto;
+  max-width: 22rem;
+  text-align: left;
+  color: var(--text-color, #d1d0c5);
+  font-size: 0.95rem;
+}
+
+#applicantOverlay .applicantChecklist li {
+  position: relative;
+  padding: 0.4rem 0 0.4rem 1.75rem;
+}
+
+#applicantOverlay .applicantChecklist li::before {
+  content: "✓";
+  position: absolute;
+  left: 0.25rem;
+  color: var(--main-color, #e2b714);
+  font-weight: bold;
+}
+
 #applicantOverlay .applicantButtonRow {
   display: flex;
   flex-wrap: wrap;
