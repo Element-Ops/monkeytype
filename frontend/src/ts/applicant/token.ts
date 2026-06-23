@@ -34,5 +34,8 @@ export function isApplicantMode(): boolean {
 }
 
 export function getApplicantName(): string | null {
-  return typeof payload?.name === "string" ? payload.name : null;
+  if (typeof payload?.name !== "string") return null;
+  // Strip any "(DUP)" marker the source data appends to duplicate entries so
+  // greetings read "Hi Kavin Sula," rather than "Hi Kavin Sula (DUP),".
+  return payload.name.replace(/\s*\(DUP\)\s*/gi, " ").trim();
 }
