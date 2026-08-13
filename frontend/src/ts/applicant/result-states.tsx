@@ -4,7 +4,7 @@ import { render } from "solid-js/web";
 import type { ReporterResult } from "./reporter";
 
 import { restartTestEvent } from "../events/test";
-import { setApplicantTestMode } from "./mode";
+import { getDirectApplicantTestMode, setApplicantTestMode } from "./mode";
 import { getApplicantName } from "./token";
 
 type State =
@@ -66,7 +66,7 @@ const RECRUITER_EMAIL =
   (import.meta.env["VITE_APPLICANT_FALLBACK_EMAIL"] as string | undefined) ??
   "recruiter@elementops.com";
 
-function startTest(mode: "practice" | "real"): void {
+export function startTest(mode: "practice" | "real"): void {
   setApplicantTestMode(mode);
   setPreviousState(null);
   setClosed(true);
@@ -112,8 +112,8 @@ function ApplicantOverlay(): JSX.Element {
   });
 
   const greeting = (): string => {
-    const name = getApplicantName();
-    return name !== null && name.length > 0 ? `Hi ${name},` : "Hi there,";
+    const firstName = getApplicantName()?.split(/\s+/)[0];
+    return firstName ? `Hi ${firstName},` : "Hi there,";
   };
 
   return (
@@ -240,13 +240,15 @@ function ApplicantOverlay(): JSX.Element {
                       >
                         Practice Again
                       </button>
-                      <button
-                        type="button"
-                        class="applicantBtn applicantBtnPrimary"
-                        onClick={requestRealTest}
-                      >
-                        Take Real Test
-                      </button>
+                      <Show when={getDirectApplicantTestMode() !== "practice"}>
+                        <button
+                          type="button"
+                          class="applicantBtn applicantBtnPrimary"
+                          onClick={requestRealTest}
+                        >
+                          Take Real Test
+                        </button>
+                      </Show>
                     </div>
                   </>
                 );

@@ -1,6 +1,7 @@
 import { restartTestEvent } from "../events/test";
 import {
   getApplicantTestMode,
+  getDirectApplicantTestMode,
   onApplicantModeChange,
   setApplicantTestMode,
 } from "./mode";
@@ -13,9 +14,13 @@ export function mountToolbar(): void {
     <button type="button" class="applicantBtn applicantBtnSecondary" data-action="retry">
       Retry Practice
     </button>
-    <button type="button" class="applicantBtn applicantBtnSecondary" data-action="exit">
+    ${
+      getDirectApplicantTestMode() === null
+        ? `<button type="button" class="applicantBtn applicantBtnSecondary" data-action="exit">
       Exit to Menu
-    </button>
+    </button>`
+        : ""
+    }
   `;
   document.body.appendChild(toolbar);
 

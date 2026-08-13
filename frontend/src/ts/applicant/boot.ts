@@ -1,9 +1,14 @@
 import "./ui-lock.css";
 import { applyConfigLock } from "./config-lock";
-import { mountResultStates, setReporterState } from "./result-states";
+import {
+  mountResultStates,
+  setReporterState,
+  startTest,
+} from "./result-states";
 import { onReporterStateChange } from "./reporter";
 import { mountToolbar } from "./toolbar";
 import { navigationEvent } from "../events/navigation";
+import { getDirectApplicantTestMode } from "./mode";
 
 function injectNoIndexMeta(): void {
   const meta = document.createElement("meta");
@@ -30,4 +35,7 @@ export function boot(): void {
     url: location.pathname + location.search + location.hash,
     options: { force: true },
   });
+
+  const directMode = getDirectApplicantTestMode();
+  if (directMode !== null) startTest(directMode);
 }

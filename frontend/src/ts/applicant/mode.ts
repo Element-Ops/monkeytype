@@ -1,5 +1,14 @@
 export type ApplicantTestMode = "intro" | "practice" | "real";
 
+export type DirectApplicantTestMode = Exclude<ApplicantTestMode, "intro">;
+
+export function getDirectApplicantTestMode(): DirectApplicantTestMode | null {
+  const requestedMode = new URLSearchParams(window.location.search).get("mode");
+  return requestedMode === "practice" || requestedMode === "real"
+    ? requestedMode
+    : null;
+}
+
 let mode: ApplicantTestMode = "intro";
 
 const listeners = new Set<(m: ApplicantTestMode) => void>();
