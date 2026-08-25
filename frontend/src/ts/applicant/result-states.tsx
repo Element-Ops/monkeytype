@@ -1,4 +1,4 @@
-import { createEffect, createSignal, JSX, Match, Show, Switch } from "solid-js";
+import { createSignal, JSX, Match, Show, Switch } from "solid-js";
 import { render } from "solid-js/web";
 
 import type { ReporterResult } from "./reporter";
@@ -21,7 +21,6 @@ type State =
 const [state, setState] = createSignal<State>({ kind: "intro" });
 const [previousState, setPreviousState] = createSignal<State | null>(null);
 const [closed, setClosed] = createSignal(false);
-const [secondsLeft, setSecondsLeft] = createSignal<number | null>(null);
 
 export function setSubmitting(): void {
   setClosed(false);
@@ -84,33 +83,7 @@ function cancelRealTest(): void {
   setState(prev ?? { kind: "intro" });
 }
 
-function dismiss(): void {
-  setClosed(true);
-  setSecondsLeft(null);
-}
-
 function ApplicantOverlay(): JSX.Element {
-  // 60s auto-dismiss for success state only
-  createEffect(() => {
-    const s = state();
-    if (s.kind !== "success" || closed()) {
-      setSecondsLeft(null);
-      return;
-    }
-    let remaining = 60;
-    setSecondsLeft(remaining);
-    const interval = window.setInterval(() => {
-      remaining -= 1;
-      if (remaining <= 0) {
-        window.clearInterval(interval);
-        dismiss();
-      } else {
-        setSecondsLeft(remaining);
-      }
-    }, 1000);
-    return () => window.clearInterval(interval);
-  });
-
   const greeting = (): string => {
     const firstName = getApplicantName()?.split(/\s+/)[0];
     return firstName ? `Hi ${firstName},` : "Hi there,";
@@ -199,18 +172,7 @@ function ApplicantOverlay(): JSX.Element {
                       WPM: {s.wpm} &nbsp; Accuracy: {s.acc}%
                     </div>
                     <p>Your result was recorded.</p>
-                    <p class="applicantSubtle">
-                      Closing in {secondsLeft()}s...
-                    </p>
-                    <div class="applicantButtonRow">
-                      <button
-                        type="button"
-                        class="applicantBtn applicantBtnSecondary"
-                        onClick={dismiss}
-                      >
-                        Close
-                      </button>
-                    </div>
+                    <p>You may close this tab and return to the Applicant Video.</p>
                   </>
                 );
               }}
