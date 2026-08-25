@@ -172,7 +172,15 @@ function ApplicantOverlay(): JSX.Element {
                       WPM: {s.wpm} &nbsp; Accuracy: {s.acc}%
                     </div>
                     <p>Your result was recorded.</p>
-                    <p>You may close this tab and return to the Applicant Video.</p>
+                    <Show
+                      when={getDirectApplicantTestMode() === "real"}
+                      fallback={<p>You may close this tab.</p>}
+                    >
+                      <p>
+                        You may close this tab and return to the Applicant
+                        Video.
+                      </p>
+                    </Show>
                   </>
                 );
               }}
