@@ -5,7 +5,7 @@ import {
   setReporterState,
   startTest,
 } from "./result-states";
-import { onReporterStateChange } from "./reporter";
+import { flushPending, onReporterStateChange } from "./reporter";
 import { mountToolbar } from "./toolbar";
 import { navigationEvent } from "../events/navigation";
 import { getDirectApplicantTestMode } from "./mode";
@@ -35,6 +35,10 @@ export function boot(): void {
     url: location.pathname + location.search + location.hash,
     options: { force: true },
   });
+
+  // Results that couldn't be sent earlier (e.g. n8n was down) are retried here.
+  void flushPending();
+  window.setInterval(() => void flushPending(), 20_000);
 
   const directMode = getDirectApplicantTestMode();
   if (directMode !== null) startTest(directMode);

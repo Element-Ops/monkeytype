@@ -39,3 +39,10 @@ export function getApplicantName(): string | null {
   // greetings read "Hi Kavin Sula," rather than "Hi Kavin Sula (DUP),".
   return payload.name.replace(/\s*\(DUP\)\s*/gi, " ").trim();
 }
+
+// Airtable record ID carried in the link (used to tie backup copies of results to the applicant).
+export function getApplicantRecordId(): string | null {
+  return typeof payload?.r === "string" && /^rec[A-Za-z0-9]{14}$/.test(payload.r)
+    ? payload.r
+    : null;
+}
