@@ -1006,6 +1006,8 @@ export async function finish(difficultyFailed = false): Promise<void> {
   }
 
   let dontSave = false;
+  // why monkeytype refused the result; applicant links still send it (with this reason)
+  let invalidReason = "";
 
   if (countUndefined(ce) > 0) {
     console.log(ce);
@@ -1039,6 +1041,7 @@ export async function finish(difficultyFailed = false): Promise<void> {
     ce.testDuration <= 120
   ) {
     showNoticeNotification("Test invalid - inconsistent test duration");
+    invalidReason = "inconsistent test duration";
     console.error("Test duration inconsistent", ce.testDuration, dateDur);
     TestStats.setInvalid();
     dontSave = true;
@@ -1067,15 +1070,18 @@ export async function finish(difficultyFailed = false): Promise<void> {
     (Config.mode === "zen" && completedEvent.testDuration < 15)
   ) {
     showNoticeNotification("Test invalid - too short");
+    invalidReason = "too short";
     TestStats.setInvalid();
     tooShort = true;
     dontSave = true;
   } else if (afkDetected) {
     showNoticeNotification("Test invalid - AFK detected");
+    invalidReason = "AFK detected";
     TestStats.setInvalid();
     dontSave = true;
   } else if (TestState.isRepeated) {
     showNoticeNotification("Test invalid - repeated");
+    invalidReason = "repeated";
     TestStats.setInvalid();
     dontSave = true;
   } else if (
@@ -1088,6 +1094,7 @@ export async function finish(difficultyFailed = false): Promise<void> {
       completedEvent.mode2 === "10")
   ) {
     showNoticeNotification("Test invalid - wpm");
+    invalidReason = "wpm";
     TestStats.setInvalid();
     dontSave = true;
   } else if (
@@ -1100,6 +1107,7 @@ export async function finish(difficultyFailed = false): Promise<void> {
       completedEvent.mode2 === "10")
   ) {
     showNoticeNotification("Test invalid - raw");
+    invalidReason = "raw";
     TestStats.setInvalid();
     dontSave = true;
   } else if (
@@ -1109,6 +1117,7 @@ export async function finish(difficultyFailed = false): Promise<void> {
       (completedEvent.acc < 50 || completedEvent.acc > 100))
   ) {
     showNoticeNotification("Test invalid - accuracy");
+    invalidReason = "accuracy";
     TestStats.setInvalid();
     dontSave = true;
   }
@@ -1180,18 +1189,21 @@ export async function finish(difficultyFailed = false): Promise<void> {
     Promise.resolve(null);
   const applicantToken = getApplicantToken();
   if (applicantToken !== null) {
-    if (!dontSave) {
-      TestStats.resetIncomplete();
-      if (getApplicantTestMode() === "real") {
-        setApplicantSubmitting();
-        savingResultPromise = ApplicantReporter.send(
-          completedEvent,
-          applicantToken,
-        );
-      } else {
-        // practice mode — show overlay with score, do not submit
-        notifyPracticeComplete(completedEvent.wpm, completedEvent.acc);
-      }
+    // Applicant links send every finished test, even one monkeytype calls invalid
+    // (e.g. Caps Lock on the whole time = 0% accuracy), so the real numbers reach
+    // Airtable and the applicant gets our completion screen, not "sign in to save".
+    if (difficultyFailed) invalidReason = `failed - ${failReason}`;
+    TestStats.resetIncomplete();
+    if (getApplicantTestMode() === "real") {
+      setApplicantSubmitting();
+      savingResultPromise = ApplicantReporter.send(
+        completedEvent,
+        applicantToken,
+        invalidReason,
+      );
+    } else {
+      // practice mode — show overlay with score, do not submit
+      notifyPracticeComplete(completedEvent.wpm, completedEvent.acc);
     }
   } else {
     const user = getAuthenticatedUser();

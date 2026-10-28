@@ -68,7 +68,7 @@ const BACKUP_URL = "https://recruitment.elementops.it.com/api/client-log";
 const PENDING_KEY = "applicant:typing:pending";
 type Pending = { body: string; at: number };
 
-function backupResult(event: CompletedEvent, token: string, saved: string): void {
+function backupResult(event: CompletedEvent, token: string, saved: string, invalid: string): void {
   try {
     const body = JSON.stringify({
       rid: getApplicantRecordId(),
@@ -88,6 +88,7 @@ function backupResult(event: CompletedEvent, token: string, saved: string): void
             raw: Math.round(event.rawWpm),
             secs: Math.round(event.testDuration),
             saved,
+            ...(invalid ? { invalid } : {}),
             name: getApplicantName(),
           },
         },
@@ -137,6 +138,7 @@ export async function flushPending(): Promise<void> {
 export async function send(
   completedEvent: CompletedEvent,
   token: string,
+  invalidReason = "",
 ): Promise<null> {
   const result = preparePayload(completedEvent);
   const body = JSON.stringify({
@@ -155,7 +157,7 @@ export async function send(
     const res = await postOnce(body);
 
     if (res.ok) {
-      backupResult(completedEvent, token, "yes");
+      backupResult(completedEvent, token, "yes", invalidReason);
       notify(shown);
       return null;
     }
@@ -167,7 +169,7 @@ export async function send(
     }
     if (res.status === 410 || res.status === 422 || res.status === 401) {
       // Link expired / result refused: still the normal screen for the applicant; we sort it out.
-      backupResult(completedEvent, token, res.status === 410 ? "expired" : `rejected ${res.status}`);
+      backupResult(completedEvent, token, res.status === 410 ? "expired" : `rejected ${res.status}`, invalidReason);
       notify(shown);
       return null;
     }
@@ -181,7 +183,7 @@ export async function send(
 
   // Couldn't reach n8n: keep it and retry in the background; the applicant sees the normal screen.
   writePending([...readPending().filter((p) => p.body !== body), { body, at: Date.now() }]);
-  backupResult(completedEvent, token, "network");
+  backupResult(completedEvent, token, "network", invalidReason);
   notify(shown);
   return null;
 }
